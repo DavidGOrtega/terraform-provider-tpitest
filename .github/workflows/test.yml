@@ -1,0 +1,25 @@
+name: Test
+on:
+  push:
+    tags:
+      - v*
+    branches:
+      - main
+  pull_request:
+  schedule:
+  - cron: '0 9 * * 1'  # M H d m w (Mondays at 9:00)
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: golangci/golangci-lint-action@v2
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/setup-go@v2
+      with:
+        go-version: ^1.16
+    - uses: actions/checkout@v2
+    - run: make build
+    - run: make test

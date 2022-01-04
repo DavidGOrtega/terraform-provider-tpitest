@@ -1,0 +1,48 @@
+name: Release
+on: 
+  release:
+    types: [published]
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-go@v2
+        with:
+          go-version: 1.17
+      - run: |
+          gpg --import <<< "$TERRAFORM_REGISTRY_GPG_PRIVATE_KEY"
+        env:
+          TERRAFORM_REGISTRY_GPG_PRIVATE_KEY: ${{ secrets.TERRAFORM_REGISTRY_GPG_PRIVATE_KEY }}
+      - uses: goreleaser/goreleaser-action@v2
+        with:
+          version: latest
+          args: release --rm-dist
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  synchronize:
+    # Empyrically equivalent to pressing the "Resync" button in the Settings
+    # page of Terraform Registry, but without bothering humans in the process
+    # https://registry.terraform.io/providers/iterative/iterative/latest/settings
+    # https://www.terraform.io/docs/registry/providers/publishing.html#webhooks
+    needs: release
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+    - uses: hashicorp/setup-terraform@v1
+    - run: |
+        cat <<END > main.tf
+          terraform {
+            required_providers {
+              iterative = {
+                source  = "iterative/iterative",
+                version = "${GITHUB_REF##refs/tags/v}"
+              }
+            }
+          }
+          provider "iterative" {}
+        END
+    - run: |
+        while ! terraform init; do
+          sleep $((2**++try))
+        done
